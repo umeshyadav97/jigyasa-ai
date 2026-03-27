@@ -62,7 +62,7 @@ const EXPRESSION_LIST: ExpressionName[] = [
 
 export const AvatarDemoScreen = () => {
   const [morph, setMorph] = useState<Partial<MorphState>>({});
-  const [idleOn, setIdleOn] = useState(true);
+  const [speakingPreview, setSpeakingPreview] = useState(false);
   const [preset, setPreset] = useState<"default_female" | "default_male">(
     "default_female",
   );
@@ -95,7 +95,8 @@ export const AvatarDemoScreen = () => {
           morph={morph}
           width={280}
           height={360}
-          idleAnimations={idleOn}
+          isSpeaking={speakingPreview}
+          emotion={activeExpression === "happy" ? "happy" : "neutral"}
         />
       </View>
 
@@ -124,14 +125,14 @@ export const AvatarDemoScreen = () => {
           </View>
         </View>
 
-        {/* Idle toggle */}
+        {/* Speaking preview toggle */}
         <View style={styles.row}>
-          <Text style={styles.sectionLabel}>IDLE ANIMATIONS</Text>
+          <Text style={styles.sectionLabel}>SPEAKING PREVIEW</Text>
           <Switch
-            value={idleOn}
-            onValueChange={setIdleOn}
+            value={speakingPreview}
+            onValueChange={setSpeakingPreview}
             trackColor={{ true: "#4ECDC4", false: "#333" }}
-            thumbColor={idleOn ? "#fff" : "#888"}
+            thumbColor={speakingPreview ? "#fff" : "#888"}
           />
         </View>
 

@@ -1,16 +1,15 @@
-// ─── AVATAR COMPONENT ─────────────────────────────────────────────────────────
-// Main entry point. Composes all layers in correct draw order.
-// Handles idle animations (blink, head sway) via reanimated shared values.
-
 import { Canvas, Group } from "@shopify/react-native-skia";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { Platform, View } from "react-native";
 
 import {
   AvatarConfig,
+  AvatarEmotion,
   DEFAULT_MORPH,
   MorphState,
   PRESET_AVATARS,
 } from "./avatar.types";
+import { useAvatarAnimation, useAvatarVoiceSync } from "./useAvatarAnimation";
 
 import { BrowsLayer } from "./layers/Browslayer";
 import { EyesLayer } from "./layers/Eyeslayer";
@@ -18,197 +17,195 @@ import { FaceBase } from "./layers/Facebase";
 import { HairBack, HairFront } from "./layers/Hairlayer";
 import { MouthLayer } from "./layers/Mouthlayer";
 import { NoseLayer } from "./layers/Noselayer";
-import { lerp } from "./utils/math";
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
-
-export interface AvatarProps {
-  /** Avatar visual configuration */
-  config?: AvatarConfig;
-  /** Live morph state (from voice analysis or manual) */
-  morph?: Partial<MorphState>;
-  /** Canvas width */
-  width?: number;
-  /** Canvas height */
-  height?: number;
-  /** Enable idle animations (blink, subtle sway) */
-  idleAnimations?: boolean;
-  /** Preset name instead of full config */
-  preset?: "default_female" | "default_male";
+interface AudioRefLike {
+  current: unknown;
 }
 
-// ─── SMOOTHED MORPH HOOK ──────────────────────────────────────────────────────
-// Takes raw morph targets and returns smoothed values using lerp each frame
+export interface AvatarProps {
+  config?: AvatarConfig;
+  morph?: Partial<MorphState>;
+  width?: number;
+  height?: number;
+  preset?: "default_female" | "default_male";
+  isSpeaking?: boolean;
+  emotion?: AvatarEmotion;
+  audioRef?: AudioRefLike;
+}
 
 function useSmoothedMorph(
   target: Partial<MorphState>,
-  smoothK = 0.14,
+  smoothK = 0.18,
 ): MorphState {
   const smoothed = useRef<MorphState>({ ...DEFAULT_MORPH });
-  const [displayMorph, setDisplayMorph] = React.useState<MorphState>({
+  const targetRef = useRef<Partial<MorphState>>(target);
+  const [displayMorph, setDisplayMorph] = useState<MorphState>({
     ...DEFAULT_MORPH,
   });
   const frameRef = useRef<number>(0);
 
+  targetRef.current = target;
+
   useEffect(() => {
     const tick = () => {
-      const s = smoothed.current;
-      const t = { ...DEFAULT_MORPH, ...target };
+      const nextTarget = { ...DEFAULT_MORPH, ...targetRef.current };
+      const current = smoothed.current;
       let changed = false;
 
       (Object.keys(DEFAULT_MORPH) as (keyof MorphState)[]).forEach((key) => {
-        const next = lerp(s[key], t[key], smoothK);
-        if (Math.abs(next - s[key]) > 0.001) {
-          (s as any)[key] = next;
+        const nextValue =
+          current[key] + (nextTarget[key] - current[key]) * smoothK;
+
+        if (Math.abs(nextValue - current[key]) > 0.001) {
+          current[key] = nextValue;
           changed = true;
         }
       });
 
-      if (changed) setDisplayMorph({ ...s });
+      if (changed) {
+        setDisplayMorph({ ...current });
+      }
+
       frameRef.current = requestAnimationFrame(tick);
     };
 
     frameRef.current = requestAnimationFrame(tick);
+
     return () => {
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+      }
     };
-  }, [target, smoothK]);
+  }, [smoothK]);
 
   return displayMorph;
 }
 
-// ─── IDLE ANIMATION HOOK ──────────────────────────────────────────────────────
+const WebAvatarFallback = ({
+  width,
+  height,
+}: {
+  width: number;
+  height: number;
+}) => {
+  const orbSize = Math.min(width, height) * 0.42;
 
-function useIdleAnimations(enabled: boolean): Partial<MorphState> {
-  const [idle, setIdle] = React.useState<Partial<MorphState>>({});
-  const frameRef = useRef<number>(0);
-  const blinkTimer = useRef(0);
-  const blinkState = useRef<"open" | "closing" | "closed" | "opening">("open");
-  const blinkPhase = useRef(0);
-  const nextBlink = useRef(3.5 + Math.random() * 2);
+  return (
+    <View
+      style={{
+        width,
+        height,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <View
+        style={{
+          width: orbSize,
+          height: orbSize,
+          borderRadius: orbSize / 2,
+          backgroundColor: "rgba(123,92,250,0.2)",
+          alignItems: "center",
+          justifyContent: "center",
+          shadowColor: "#9F85FF",
+          shadowOpacity: 0.35,
+          shadowRadius: 28,
+          shadowOffset: { width: 0, height: 12 },
+        }}
+      >
+        <View
+          style={{
+            width: orbSize * 0.72,
+            height: orbSize * 0.72,
+            borderRadius: orbSize,
+            backgroundColor: "#6F4EF6",
+            borderWidth: 8,
+            borderColor: "rgba(255,255,255,0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              width: orbSize * 0.38,
+              height: 10,
+              borderRadius: 10,
+              backgroundColor: "rgba(255,255,255,0.9)",
+            }}
+          />
+        </View>
+      </View>
+    </View>
+  );
+};
 
-  useEffect(() => {
-    if (!enabled) return;
-    let last = performance.now();
-
-    const tick = (now: number) => {
-      const dt = Math.min((now - last) / 1000, 0.05);
-      last = now;
-
-      blinkTimer.current += dt;
-
-      // Blink state machine
-      let blinkL = 0;
-      let blinkR = 0;
-
-      if (blinkTimer.current >= nextBlink.current) {
-        blinkState.current = "closing";
-        blinkPhase.current = 0;
-        nextBlink.current = blinkTimer.current + 3.5 + Math.random() * 3;
-      }
-
-      if (blinkState.current === "closing") {
-        blinkPhase.current += dt / 0.06;
-        blinkL = blinkR = Math.min(1, blinkPhase.current);
-        if (blinkPhase.current >= 1) blinkState.current = "opening";
-      } else if (blinkState.current === "opening") {
-        blinkPhase.current -= dt / 0.1;
-        blinkL = blinkR = Math.max(0, blinkPhase.current);
-        if (blinkPhase.current <= 0) blinkState.current = "open";
-      }
-
-      // Subtle gaze drift
-      const t = blinkTimer.current;
-      const gazeX = Math.sin(t * 0.23) * 0.15 + Math.sin(t * 0.7) * 0.05;
-      const gazeY = Math.sin(t * 0.18) * 0.1;
-
-      // Head sway
-      const headTiltZ = Math.sin(t * 0.35) * 1.5 + Math.sin(t * 0.8) * 0.5;
-      const headTiltX = Math.sin(t * 0.28) * 1.0;
-
-      // Occasional micro brow raise
-      const browMicro = Math.max(0, Math.sin(t * 0.15) * 0.12);
-
-      setIdle({
-        blinkL,
-        blinkR,
-        eyeGazeX: gazeX,
-        eyeGazeY: gazeY,
-        headTiltZ,
-        headTiltX,
-        browRaiseL: browMicro,
-        browRaiseR: browMicro,
-      });
-
-      frameRef.current = requestAnimationFrame(tick);
-    };
-
-    frameRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
-    };
-  }, [enabled]);
-
-  return idle;
-}
-
-// ─── AVATAR COMPONENT ─────────────────────────────────────────────────────────
-
-export const Avatar: React.FC<AvatarProps> = ({
+export const MeeraAvatar: React.FC<AvatarProps> = ({
   config: configProp,
   morph: morphProp = {},
   width = 320,
   height = 420,
-  idleAnimations = true,
   preset = "default_female",
+  isSpeaking: isSpeakingProp,
+  emotion = "neutral",
+  audioRef,
 }) => {
+  if (Platform.OS === "web") {
+    return <WebAvatarFallback width={width} height={height} />;
+  }
+
   const config = configProp ?? PRESET_AVATARS[preset];
+  const voiceSync = useAvatarVoiceSync(audioRef);
+  const isSpeaking = isSpeakingProp ?? voiceSync.isSpeaking;
+  const { avatarState, morph } = useAvatarAnimation({
+    isSpeaking,
+    emotion,
+  });
 
-  // Merge idle + morph (morph prop overrides idle blinks/gaze if provided)
-  const idle = useIdleAnimations(idleAnimations);
-  const mergedMorph: Partial<MorphState> = { ...idle, ...morphProp };
+  const mergedMorph = useSmoothedMorph(
+    {
+      ...morph,
+      ...morphProp,
+    },
+    0.18,
+  );
 
-  // Smooth all values
-  const smoothed = useSmoothedMorph(mergedMorph, 0.14);
-
-  // Avatar center point
   const cx = width / 2;
   const cy = height * 0.44;
 
   return (
     <Canvas style={{ width, height }}>
       <Group
+        origin={{ x: cx, y: cy }}
         transform={[
-          { translateX: cx },
-          { translateY: cy },
-          { rotate: ((smoothed.headTiltZ ?? 0) * Math.PI) / 180 },
+          { rotate: ((mergedMorph.headTiltZ ?? 0) * Math.PI) / 180 },
         ]}
       >
-        {/* Draw order: back → front */}
-
-        {/* 1. Hair (back layer) */}
         <HairBack cx={cx} cy={cy} face={config.face} hair={config.hair} />
-
-        {/* 2. Face base (skin, shading, neck, ears) */}
-        <FaceBase cx={cx} cy={cy} config={config} morph={smoothed} />
-
-        {/* 3. Eyebrows */}
-        <BrowsLayer cx={cx} cy={cy} config={config} morph={smoothed} />
-
-        {/* 4. Nose */}
-        <NoseLayer cx={cx} cy={cy} config={config} morph={smoothed} />
-
-        {/* 5. Eyes (with lashes over skin) */}
-        <EyesLayer cx={cx} cy={cy} config={config} morph={smoothed} />
-
-        {/* 6. Mouth */}
-        <MouthLayer cx={cx} cy={cy} config={config} morph={smoothed} />
-
-        {/* 7. Hair (front/fringe layer — over face) */}
+        <FaceBase cx={cx} cy={cy} config={config} morph={mergedMorph} />
+        <BrowsLayer cx={cx} cy={cy} config={config} morph={mergedMorph} />
+        <NoseLayer cx={cx} cy={cy} config={config} morph={mergedMorph} />
+        <EyesLayer
+          cx={cx}
+          cy={cy}
+          config={config}
+          morph={mergedMorph}
+          isBlinking={avatarState.isBlinking}
+          emotion={avatarState.emotion}
+        />
+        <MouthLayer
+          cx={cx}
+          cy={cy}
+          config={config}
+          morph={mergedMorph}
+          mouthOpen={avatarState.mouthOpen}
+          emotion={avatarState.emotion}
+        />
         <HairFront cx={cx} cy={cy} face={config.face} hair={config.hair} />
       </Group>
     </Canvas>
   );
 };
 
-export default Avatar;
+export const Avatar = MeeraAvatar;
+
+export default MeeraAvatar;

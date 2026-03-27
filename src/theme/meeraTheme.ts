@@ -1,0 +1,47 @@
+export const meeraTheme = {
+  background: "#09070D",
+  backgroundSoft: "#120A18",
+  surface: "#17111F",
+  surfaceAlt: "#21162A",
+  card: "#F6F3F8",
+  cardMuted: "rgba(255,255,255,0.06)",
+  white: "#FFFFFF",
+  text: "#F5F1FA",
+  textMuted: "#B9AFC9",
+  textDark: "#17111F",
+  border: "rgba(255,255,255,0.12)",
+  borderSoft: "rgba(255,255,255,0.08)",
+  purple: "#B10DFF",
+  pink: "#FF5FCF",
+  orange: "#FFB347",
+  blue: "#5B7CFF",
+  red: "#FF5A5A",
+  green: "#47D18C",
+  glowPurple: "rgba(177,13,255,0.42)",
+  glowBlue: "rgba(91,124,255,0.4)",
+  glowOrange: "rgba(255,179,71,0.36)",
+};
+
+export const meeraShadows = {
+  soft: {
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.35,
+    shadowRadius: 28,
+    elevation: 12,
+  },
+  glowPurple: {
+    shadowColor: "#B10DFF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.65,
+    shadowRadius: 24,
+    elevation: 14,
+  },
+  glowBlue: {
+    shadowColor: "#5B7CFF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 28,
+    elevation: 12,
+  },
+};
