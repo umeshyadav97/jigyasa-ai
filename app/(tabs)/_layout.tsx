@@ -11,31 +11,9 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarShowLabel: true,
-        tabBarActiveTintColor: meeraTheme.white,
-        tabBarInactiveTintColor: meeraTheme.textMuted,
+        tabBarShowLabel: false,
         tabBarStyle: {
-          position: "absolute",
-          left: 16,
-          right: 16,
-          bottom: 14,
-          height: 74,
-          borderRadius: 28,
-          borderTopWidth: 0,
-          backgroundColor: "rgba(20,12,26,0.94)",
-          shadowColor: "#000000",
-          shadowOpacity: 0.45,
-          shadowRadius: 24,
-          shadowOffset: { width: 0, height: 12 },
-          elevation: 14,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "700",
-          paddingBottom: 6,
-        },
-        tabBarItemStyle: {
-          paddingTop: 8,
+          display: "none", // Hide tab bar completely for Chatpodia design
         },
       }}
     >

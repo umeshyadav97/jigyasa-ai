@@ -1,129 +1,194 @@
-import Avatar from "@/src/components/avatar/avatar";
-import { getVoiceApiUrl, voiceApiConfig } from "@/src/config/voice";
-import { useVoiceAssistant } from "@/src/hooks/useVoiceAssistant";
-import { meeraShadows, meeraTheme } from "@/src/theme/meeraTheme";
+import { meeraTheme } from "@/src/theme/meeraTheme";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useRouter } from "expo-router";
 import React from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import TypewriterText from "@/src/components/ui/TypewriterText";
 
-const statusCopy = {
-  idle: "Press record and start talking",
-  recording: "Capturing voice input",
-  uploading: "Sending request to /voice",
-  playing: "Assistant is speaking back",
-  error: "Needs attention",
-} as const;
+const chatHistory = [
+  {
+    id: "m1",
+    sender: "ai",
+    content: "What are we building today? 😄",
+    time: "10:00 AM",
+    actions: ["Copy", "Share"],
+  },
+  {
+    id: "m2",
+    sender: "user",
+    content: "Recommended music",
+    time: "10:02 AM",
+    actions: ["Edit"],
+  },
+  {
+    id: "m3",
+    sender: "ai",
+    content: "Here are some quick reply suggestions for your vibe:",
+    time: "10:02 AM",
+    isDropdown: true,
+    suggestions: [
+      { id: "s1", icon: "music-note", label: "Lofi Beats" },
+      { id: "s2", icon: "headset", label: "Nature & Ambient Sounds" },
+      { id: "s3", icon: "local-fire-department", label: "Motivational & Classical" },
+    ],
+    actions: ["Copy", "Regenerate", "Like", "Dislike"],
+    stream: true,
+  },
+];
 
-export default function ExploreScreen() {
-  const assistant = useVoiceAssistant();
+const getActionIcon = (act: string) => {
+  switch (act) {
+    case "Copy": return "content-copy";
+    case "Regenerate": return "refresh";
+    case "Edit": return "edit";
+    case "Like": return "thumb-up-off-alt";
+    case "Dislike": return "thumb-down-off-alt";
+    default: return "reply";
+  }
+};
+
+export default function ChatScreen() {
+  const router = useRouter();
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.background}>
-        <View style={[styles.glow, styles.leftGlow]} />
-        <View style={[styles.glow, styles.rightGlow]} />
+      <View style={styles.header}>
+        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+          <MaterialIcons name="chevron-left" size={28} color={meeraTheme.white} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Chatpodia</Text>
+        <Pressable style={styles.iconButton}>
+          <MaterialIcons name="more-horiz" size={24} color={meeraTheme.white} />
+        </Pressable>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior="padding"
       >
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerTitle}>Talk Studio</Text>
-            <Text style={styles.headerSubtitle}>
-              Voice capture, transcript, and playback in one flow.
-            </Text>
-          </View>
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>
-              {voiceApiConfig.useMock ? "Mock Mode" : "Live Mode"}
-            </Text>
-          </View>
-        </View>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.chatScroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {chatHistory.map((msg) => {
+            const isUser = msg.sender === "user";
 
-        <View style={styles.consoleCard}>
-          <View style={styles.consoleGlow} />
-          <View style={styles.consoleScreen}>
-            <Avatar
-              width={220}
-              height={220}
-              isSpeaking={assistant.isAvatarSpeaking}
-              emotion={assistant.emotion}
+            return (
+              <View
+                key={msg.id}
+                style={[
+                  styles.messageRow,
+                  isUser ? styles.messageRowUser : styles.messageRowBot,
+                ]}
+              >
+                {!isUser && (
+                   <LinearGradient
+                    colors={["#50FFE2", "#2AE7A1"]}
+                    style={styles.botAvatar}
+                  />
+                )}
+
+                <View style={[styles.bubbleWrap, isUser ? styles.bubbleWrapUser : styles.bubbleWrapBot]}>
+                  <View
+                    style={[
+                      styles.messageBubble,
+                      isUser ? styles.bubbleUser : styles.bubbleBot,
+                    ]}
+                  >
+                    {!isUser && msg.isDropdown && (
+                      <View style={styles.dropdownHeader}>
+                        <MaterialIcons name="chat-bubble-outline" size={16} color={meeraTheme.white} />
+                        <Text style={styles.dropdownTitle}>{msg.content}</Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={20} color={meeraTheme.white} />
+                      </View>
+                    )}
+
+                    {(!msg.isDropdown) && (
+                      msg.stream ? (
+                        <TypewriterText text={msg.content} style={[styles.messageText, isUser ? styles.textUser : styles.textBot]} delay={20} />
+                      ) : (
+                        <Text style={[styles.messageText, isUser ? styles.textUser : styles.textBot]}>
+                          {msg.content}
+                        </Text>
+                      )
+                    )}
+
+                    {msg.isDropdown && msg.suggestions && (
+                      <View style={styles.dropdownBody}>
+                        {msg.suggestions.map((sug) => (
+                          <View key={sug.id} style={styles.suggestionRow}>
+                            <MaterialIcons name={sug.icon as any} size={18} color={meeraTheme.textMuted} />
+                            <Text style={styles.suggestionText}>{sug.label}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.footerRow}>
+                    <Text style={styles.timestamp}>{msg.time}</Text>
+
+                    {msg.actions && (
+                      <View style={styles.actionRow}>
+                        {msg.actions.map((act) => (
+                          <Pressable key={act} style={styles.actionPill}>
+                            <MaterialIcons
+                              name={getActionIcon(act) as any}
+                              size={act === "Like" || act === "Dislike" ? 14 : 12}
+                              color={meeraTheme.textMuted}
+                            />
+                            {act !== "Like" && act !== "Dislike" && (
+                              <Text style={styles.actionText}>{act}</Text>
+                            )}
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {isUser && (
+                  <View style={styles.botAvatar}>
+                    <MaterialIcons name="person" size={24} color={meeraTheme.textMuted} />
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
+
+        <View style={styles.floatingInputWrapper}>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Type a message..."
+              placeholderTextColor={meeraTheme.textMuted}
+              autoFocus={true} // Auto focus when they land on chat
             />
-          </View>
-
-          <View style={styles.consoleStatusRow}>
-            <Text style={styles.consoleStatus}>{statusCopy[assistant.status]}</Text>
-            <View style={styles.statusDot} />
-          </View>
-
-          <View style={styles.consoleButtons}>
-            <Pressable
-              style={[
-                styles.recordButton,
-                assistant.isRecording && styles.recordButtonActive,
-              ]}
-              onPress={() => void assistant.toggleRecording()}
-            >
-              <MaterialIcons
-                color={meeraTheme.white}
-                name={assistant.isRecording ? "stop" : "keyboard-voice"}
-                size={24}
-              />
-            </Pressable>
-
-            <Pressable
-              style={styles.roundControl}
-              onPress={() =>
-                void (assistant.isPlaying
-                  ? assistant.stopPlayback()
-                  : assistant.replay())
-              }
-            >
-              <MaterialIcons
-                color={meeraTheme.white}
-                name={assistant.isPlaying ? "stop-circle" : "play-circle-outline"}
-                size={22}
-              />
-            </Pressable>
-
-            <View style={styles.roundControl}>
-              <MaterialIcons color={meeraTheme.white} name="tune" size={22} />
+            <View style={styles.inputActions}>
+              <MaterialIcons name="graphic-eq" size={20} color={meeraTheme.textMuted} />
+              <Pressable
+                style={styles.sendButton}
+                onPress={() => router.push("/voice")}
+              >
+                <MaterialIcons name="keyboard-voice" size={20} color="#081016" />
+              </Pressable>
             </View>
           </View>
         </View>
-
-        <View style={styles.infoPanel}>
-          <Text style={styles.panelTitle}>Transcript</Text>
-          <Text style={styles.panelBody}>
-            {assistant.transcript || "Recorded speech will appear here."}
-          </Text>
-        </View>
-
-        <View style={styles.infoPanel}>
-          <Text style={styles.panelTitle}>Assistant Reply</Text>
-          <Text style={styles.panelBody}>
-            {assistant.replyText || "The generated assistant response will appear here."}
-          </Text>
-        </View>
-
-        <View style={styles.apiCard}>
-          <Text style={styles.apiLabel}>API Endpoint</Text>
-          <Text style={styles.apiValue}>{getVoiceApiUrl()}</Text>
-          <Text style={styles.apiLabel}>Current State</Text>
-          <Text style={styles.apiValue}>
-            Frontend flow only. Backend can be swapped later.
-          </Text>
-        </View>
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -133,170 +198,185 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: meeraTheme.background,
   },
-  background: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: meeraTheme.background,
-  },
-  glow: {
-    position: "absolute",
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-  },
-  leftGlow: {
-    top: 130,
-    left: -80,
-    backgroundColor: meeraTheme.glowOrange,
-  },
-  rightGlow: {
-    top: 180,
-    right: -90,
-    backgroundColor: meeraTheme.glowBlue,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 120,
-    gap: 18,
-  },
-  headerRow: {
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: meeraTheme.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: meeraTheme.borderSoft,
   },
   headerTitle: {
     color: meeraTheme.white,
-    fontSize: 28,
-    fontWeight: "800",
-  },
-  headerSubtitle: {
-    color: meeraTheme.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 6,
-  },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: meeraTheme.border,
-    backgroundColor: meeraTheme.cardMuted,
-  },
-  pillText: {
-    color: meeraTheme.white,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  consoleCard: {
-    borderRadius: 34,
-    backgroundColor: "#0F0913",
-    borderWidth: 1,
-    borderColor: meeraTheme.border,
-    padding: 18,
-    ...meeraShadows.soft,
-  },
-  consoleGlow: {
-    position: "absolute",
-    top: 70,
-    left: 42,
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: meeraTheme.glowPurple,
-  },
-  consoleScreen: {
-    minHeight: 270,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "#1E1822",
-    alignItems: "center",
-    justifyContent: "center",
-    ...meeraShadows.glowBlue,
-  },
-  consoleStatusRow: {
-    marginTop: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  consoleStatus: {
-    color: meeraTheme.white,
     fontSize: 18,
     fontWeight: "700",
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: meeraTheme.green,
+  chatScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 20, // Reduced since input is no longer floating above it
+    gap: 24,
   },
-  consoleButtons: {
+  messageRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: 16,
-    marginTop: 20,
+    alignItems: "flex-end",
+    gap: 12,
   },
-  recordButton: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: meeraTheme.purple,
+  messageRowUser: {
+    justifyContent: "flex-end",
+  },
+  messageRowBot: {
+    justifyContent: "flex-start",
+  },
+  botAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginBottom: 2,
+    backgroundColor: meeraTheme.surfaceAlt,
     alignItems: "center",
     justifyContent: "center",
-    ...meeraShadows.glowPurple,
-  },
-  recordButtonActive: {
-    backgroundColor: meeraTheme.red,
-  },
-  roundControl: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: meeraTheme.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoPanel: {
-    borderRadius: 24,
-    backgroundColor: meeraTheme.surface,
     borderWidth: 1,
     borderColor: meeraTheme.borderSoft,
-    padding: 18,
   },
-  panelTitle: {
-    color: meeraTheme.white,
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
-  panelBody: {
-    color: meeraTheme.textMuted,
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  apiCard: {
-    borderRadius: 24,
-    backgroundColor: meeraTheme.surfaceAlt,
-    borderWidth: 1,
-    borderColor: "rgba(177,13,255,0.25)",
-    padding: 18,
+  bubbleWrap: {
+    maxWidth: "75%",
     gap: 8,
   },
-  apiLabel: {
-    color: "#DDBDFF",
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.7,
+  bubbleWrapUser: {
+    alignItems: "flex-end",
   },
-  apiValue: {
+  bubbleWrapBot: {
+    alignItems: "flex-start",
+  },
+  messageBubble: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 24,
+  },
+  bubbleBot: {
+    backgroundColor: meeraTheme.surfaceAlt,
+    borderTopLeftRadius: 6,
+    borderWidth: 1,
+    borderColor: meeraTheme.borderSoft,
+  },
+  bubbleUser: {
+    backgroundColor: meeraTheme.white,
+    borderTopRightRadius: 6,
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  textBot: {
+    color: meeraTheme.white,
+  },
+  textUser: {
+    color: meeraTheme.textDark,
+    fontWeight: "500",
+  },
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    paddingHorizontal: 4,
+  },
+  timestamp: {
+    color: meeraTheme.textMuted,
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: meeraTheme.surfaceAlt,
+    borderWidth: 1,
+    borderColor: meeraTheme.borderSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  actionText: {
+    color: meeraTheme.textMuted,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  dropdownHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderColor: meeraTheme.borderSoft,
+  },
+  dropdownTitle: {
     color: meeraTheme.white,
     fontSize: 14,
-    lineHeight: 21,
+    fontWeight: "600",
+    flex: 1,
+  },
+  dropdownBody: {
+    paddingTop: 12,
+    gap: 16,
+  },
+  suggestionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  suggestionText: {
+    color: meeraTheme.textMuted,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  floatingInputWrapper: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    paddingTop: 8,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: meeraTheme.surfaceAlt,
+    borderRadius: 36,
+    paddingLeft: 20,
+    paddingRight: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: meeraTheme.borderSoft,
+  },
+  textInput: {
+    flex: 1,
+    color: meeraTheme.white,
+    fontSize: 15,
+  },
+  inputActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: meeraTheme.purple, // which is now emerald green
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
