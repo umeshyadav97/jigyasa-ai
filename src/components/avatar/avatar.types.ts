@@ -68,6 +68,15 @@ export interface AvatarConfig {
   hair: HairConfig;
 }
 
+export type AvatarEmotion = "neutral" | "happy";
+
+export interface AvatarState {
+  isSpeaking: boolean;
+  mouthOpen: number;
+  isBlinking: boolean;
+  emotion: AvatarEmotion;
+}
+
 // ─── MORPH / ANIMATION STATE ─────────────────────────────────────────────────
 // All values 0.0 → 1.0 unless noted
 // These are the real-time animated values driven by voice or expressions

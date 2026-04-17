@@ -1,8 +1,3 @@
-// ─── MOUTH LAYER ──────────────────────────────────────────────────────────────
-// The most animation-critical layer.
-// Morphs: jawOpen, lipWide, lipRound, lipTight, teethShow, tongueShow,
-//         smileL, smileR
-
 import {
   BlurMask,
   Group,
@@ -12,7 +7,8 @@ import {
   vec,
 } from "@shopify/react-native-skia";
 import React from "react";
-import { AvatarConfig, MorphState } from "../avatar.types";
+
+import { AvatarConfig, AvatarEmotion, MorphState } from "../avatar.types";
 import { clamp } from "../utils/math";
 
 interface MouthProps {
@@ -20,57 +16,58 @@ interface MouthProps {
   cy: number;
   config: AvatarConfig;
   morph: MorphState;
+  mouthOpen?: number;
+  emotion?: AvatarEmotion;
 }
 
-export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
+export const MouthLayer = ({
+  cx,
+  cy,
+  config,
+  morph,
+  mouthOpen,
+  emotion = "neutral",
+}: MouthProps) => {
   const { mouth, skin, face } = config;
   const fh = face.height / 2;
+  const talkingOpen = mouthOpen ?? morph.jawOpen;
+  const smileLeft = clamp(
+    morph.smileL + (emotion === "happy" ? 0.18 : 0),
+    0,
+    1,
+  );
+  const smileRight = clamp(
+    morph.smileR + (emotion === "happy" ? 0.18 : 0),
+    0,
+    1,
+  );
+  const smileAmt = (smileLeft + smileRight) / 2;
 
-  // ── Morph-driven mouth measurements ──────────────────────────────────────
   const baseWidth = mouth.width;
   const mouthCenterY = cy + fh * 0.42;
-
-  // Smile corner offset (pulls corners up)
-  const smileAmt = (morph.smileL + morph.smileR) / 2;
   const cornerLift = smileAmt * 10;
-
-  // Wide stretches lips horizontally
   const wideExtra = morph.lipWide * 14;
   const halfW = baseWidth / 2 + wideExtra;
-
-  // Round pulls lips forward / compresses width
   const roundCompress = morph.lipRound * 0.75;
   const effectiveHalfW = halfW * (1 - roundCompress * 0.3);
-
-  // Jaw open drives vertical gap
-  const jawGap = morph.jawOpen * 28;
-
-  // Tight presses lips thin
+  const jawGap = talkingOpen * 28;
   const tightness = morph.lipTight;
 
-  // ── Key points ───────────────────────────────────────────────────────────
   const leftCornerX = cx - effectiveHalfW;
   const rightCornerX = cx + effectiveHalfW;
-  const leftCornerY = mouthCenterY - cornerLift * morph.smileL;
-  const rightCornerY = mouthCenterY - cornerLift * morph.smileR;
+  const leftCornerY = mouthCenterY - cornerLift * smileLeft;
+  const rightCornerY = mouthCenterY - cornerLift * smileRight;
 
-  // Upper lip center dip (cupid's bow)
   const cupidBowDepth = 5 - tightness * 3;
   const upperLipTopY = mouthCenterY - 9 - tightness * 2;
-  const upperLipBowY = upperLipTopY + cupidBowDepth; // bottom of bow dip
+  const upperLipBowY = upperLipTopY + cupidBowDepth;
   const upperLipMidY = mouthCenterY - 2 - tightness * 1.5;
 
-  // Lower lip
   const lowerLipBotY = mouthCenterY + 10 - tightness * 3 + jawGap * 0.15;
-  const lowerLipMidY = mouthCenterY + 2 + tightness * 1;
-
-  // Teeth / inner mouth
+  const lowerLipMidY = mouthCenterY + 2 + tightness;
   const mouthOpenTop = mouthCenterY - 1;
   const mouthOpenBot = mouthCenterY + jawGap;
 
-  // ── PATHS ─────────────────────────────────────────────────────────────────
-
-  // Inner mouth gap (dark cavity)
   const innerMouthPath =
     jawGap > 2
       ? `
@@ -84,7 +81,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
   `
       : "";
 
-  // Teeth path
   const teethPath =
     jawGap > 4
       ? `
@@ -99,12 +95,9 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
   `
       : "";
 
-  // Tongue (only when jaw open wide)
-  const tongueVisible = morph.tongueShow > 0 || jawGap > 20;
   const tongueOpacity =
     clamp((jawGap - 16) / 12, 0, 1) + morph.tongueShow * 0.8;
 
-  // Upper lip outline path (2-part: left half + right half meeting at cupid's bow)
   const upperLipPath = `
     M ${leftCornerX} ${leftCornerY}
     C ${leftCornerX + effectiveHalfW * 0.25} ${leftCornerY - 4}
@@ -121,7 +114,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
     Z
   `;
 
-  // Lower lip path
   const lowerLipPath = `
     M ${leftCornerX} ${leftCornerY + 1}
     Q ${cx - effectiveHalfW * 0.3} ${lowerLipMidY}
@@ -137,7 +129,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
     Z
   `;
 
-  // Mouth line / seam between lips
   const mouthLinePath = `
     M ${leftCornerX} ${leftCornerY}
     C ${leftCornerX + effectiveHalfW * 0.3} ${mouthCenterY - smileAmt * 3}
@@ -148,14 +139,12 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
       ${rightCornerX} ${rightCornerY}
   `;
 
-  // Nasolabial folds (smile lines) — appear with smile
   const foldOpacity = smileAmt * 0.5;
   const foldLPath = `M ${leftCornerX - 4} ${leftCornerY - 6} Q ${leftCornerX - 8} ${leftCornerY + 14} ${leftCornerX - 4} ${leftCornerY + 24}`;
   const foldRPath = `M ${rightCornerX + 4} ${rightCornerY - 6} Q ${rightCornerX + 8} ${rightCornerY + 14} ${rightCornerX + 4} ${rightCornerY + 24}`;
 
   return (
     <Group>
-      {/* ── Nasolabial folds ── */}
       {smileAmt > 0.1 && (
         <>
           <Path
@@ -181,14 +170,11 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
         </>
       )}
 
-      {/* ── Inner mouth (dark cavity) ── */}
       {jawGap > 2 && <Path path={innerMouthPath} color="#0D0508" />}
 
-      {/* ── Teeth ── */}
       {jawGap > 4 && morph.teethShow > 0.05 && (
         <Group opacity={morph.teethShow}>
           <Path path={teethPath} color={mouth.teethColor} />
-          {/* Teeth shading — slightly darker at edges */}
           <Path path={teethPath} opacity={0.15}>
             <LinearGradient
               start={vec(cx, mouthOpenTop)}
@@ -196,10 +182,9 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
               colors={[skin.shadow, "transparent"]}
             />
           </Path>
-          {/* Tooth divider lines */}
-          {[-0.35, -0.12, 0.12, 0.35].map((offset, i) => (
+          {[-0.35, -0.12, 0.12, 0.35].map((offset, index) => (
             <Path
-              key={i}
+              key={index}
               path={`M ${cx + offset * effectiveHalfW} ${mouthOpenTop + 3} L ${cx + offset * effectiveHalfW} ${mouthOpenTop + jawGap * 0.42}`}
               strokeWidth={0.8}
               color={skin.shadow}
@@ -210,7 +195,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
         </Group>
       )}
 
-      {/* ── Tongue ── */}
       {tongueOpacity > 0.05 && (
         <Oval
           rect={{
@@ -224,7 +208,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
         />
       )}
 
-      {/* ── Upper lip ── */}
       <Path path={upperLipPath}>
         <LinearGradient
           start={vec(cx, upperLipTopY)}
@@ -232,7 +215,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
           colors={[mouth.lipColor, mouth.lipColor]}
         />
       </Path>
-      {/* Upper lip shadow (top edge darker) */}
       <Path path={upperLipPath} opacity={0.3}>
         <LinearGradient
           start={vec(cx, upperLipTopY - 2)}
@@ -241,7 +223,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
         />
       </Path>
 
-      {/* ── Lower lip ── */}
       <Path path={lowerLipPath}>
         <LinearGradient
           start={vec(cx, lowerLipMidY)}
@@ -250,7 +231,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
         />
       </Path>
 
-      {/* ── Lower lip highlight (the shine) ── */}
       <Path
         path={`M ${cx - effectiveHalfW * 0.35} ${lowerLipMidY + 4} Q ${cx} ${lowerLipBotY - 1} ${cx + effectiveHalfW * 0.35} ${lowerLipMidY + 4}`}
         strokeWidth={3}
@@ -262,7 +242,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
         <BlurMask blur={2} style="normal" />
       </Path>
 
-      {/* ── Mouth seam (line between lips) ── */}
       <Path
         path={mouthLinePath}
         strokeWidth={1.2}
@@ -272,7 +251,6 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
         opacity={0.65}
       />
 
-      {/* ── Corner shadow dots ── */}
       <Oval
         rect={{ x: leftCornerX - 4, y: leftCornerY - 3, width: 8, height: 6 }}
         color={skin.shadow}
@@ -281,7 +259,12 @@ export const MouthLayer = ({ cx, cy, config, morph }: MouthProps) => {
         <BlurMask blur={2} style="normal" />
       </Oval>
       <Oval
-        rect={{ x: rightCornerX - 4, y: rightCornerY - 3, width: 8, height: 6 }}
+        rect={{
+          x: rightCornerX - 4,
+          y: rightCornerY - 3,
+          width: 8,
+          height: 6,
+        }}
         color={skin.shadow}
         opacity={0.4}
       >

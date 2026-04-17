@@ -1,7 +1,3 @@
-// ─── EYES LAYER ───────────────────────────────────────────────────────────────
-// Renders both eyes with: sclera, iris gradient, pupil, corneal highlight,
-// eyelid, lashes, and morph-driven blink / squint / gaze
-
 import {
   BlurMask,
   Circle,
@@ -13,7 +9,8 @@ import {
   vec,
 } from "@shopify/react-native-skia";
 import React from "react";
-import { AvatarConfig, MorphState } from "../avatar.types";
+
+import { AvatarConfig, AvatarEmotion, MorphState } from "../avatar.types";
 import { generateLashPoints } from "../utils/math";
 
 interface EyesProps {
@@ -21,16 +18,18 @@ interface EyesProps {
   cy: number;
   config: AvatarConfig;
   morph: MorphState;
+  isBlinking?: boolean;
+  emotion?: AvatarEmotion;
 }
 
 interface SingleEyeProps {
-  ex: number; // Eye center X
-  ey: number; // Eye center Y
+  ex: number;
+  ey: number;
   config: AvatarConfig;
-  blinkAmt: number; // 0 = open, 1 = closed
-  squintAmt: number; // 0 = open, 1 = squinted
-  gazeX: number; // -1 to +1
-  gazeY: number; // -1 to +1
+  blinkAmt: number;
+  squintAmt: number;
+  gazeX: number;
+  gazeY: number;
   side: "L" | "R";
 }
 
@@ -45,18 +44,14 @@ const SingleEye = ({
   side,
 }: SingleEyeProps) => {
   const { eyes, skin } = config;
-  const r = eyes.size; // Iris radius
-  const eyeW = r * 2.4; // Eye opening width
-  const eyeH = r * 1.15 * (1 - squintAmt * 0.45); // Eye opening height (reduced by squint)
-
-  // Open height reduced by blink
-  const openH = eyeH * (1 - blinkAmt * 0.98);
-
-  // Gaze offset (pupil/iris shift)
+  const r = eyes.size;
+  const eyeW = r * 2.4;
+  const eyeH = r * 1.15 * (1 - squintAmt * 0.45);
+  const openH = Math.max(eyeH * (1 - blinkAmt * 0.98), 0.8);
   const gazeOffX = gazeX * r * 0.3;
   const gazeOffY = gazeY * r * 0.2;
+  const lashesVisible = blinkAmt < 0.2;
 
-  // Eye socket path (the opening)
   const eyeSocketPath = `
     M ${ex - eyeW} ${ey}
     Q ${ex - eyeW * 0.5} ${ey - openH} ${ex} ${ey - openH * 1.05}
@@ -66,7 +61,6 @@ const SingleEye = ({
     Z
   `;
 
-  // Upper eyelid path (draws over top half)
   const upperLidPath = `
     M ${ex - eyeW * 1.05} ${ey + 1}
     Q ${ex - eyeW * 0.5} ${ey - openH * 1.08 - blinkAmt * eyeH * 2} ${ex} ${ey - openH * 1.1 - blinkAmt * eyeH * 2}
@@ -76,7 +70,6 @@ const SingleEye = ({
     Z
   `;
 
-  // Lash positions
   const upperLashes = generateLashPoints(ex, ey, eyeW, true, 12);
   const lowerLashes = generateLashPoints(
     ex,
@@ -88,7 +81,6 @@ const SingleEye = ({
 
   return (
     <Group>
-      {/* ── Eye socket shadow (depth) ── */}
       <Oval
         rect={{
           x: ex - eyeW * 0.9,
@@ -102,7 +94,6 @@ const SingleEye = ({
         <BlurMask blur={6} style="normal" />
       </Oval>
 
-      {/* ── Sclera (eye white) — clipped to eye socket shape ── */}
       <Group clip={eyeSocketPath}>
         <Oval
           rect={{
@@ -113,7 +104,6 @@ const SingleEye = ({
           }}
           color={eyes.scleraColor}
         />
-        {/* Sclera inner shadow (gives it depth, not pure white) */}
         <Oval
           rect={{
             x: ex - eyeW * 0.8,
@@ -131,7 +121,6 @@ const SingleEye = ({
           />
         </Oval>
 
-        {/* ── Iris ── */}
         <Group transform={[{ translateX: gazeOffX }, { translateY: gazeOffY }]}>
           <Circle cx={ex} cy={ey} r={r}>
             <RadialGradient
@@ -142,13 +131,13 @@ const SingleEye = ({
             />
           </Circle>
 
-          {/* Iris texture lines */}
-          {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => {
-            const rad = (angle * Math.PI) / 180;
+          {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, index) => {
+            const radians = (angle * Math.PI) / 180;
+
             return (
               <Path
-                key={i}
-                path={`M ${ex + Math.cos(rad) * r * 0.3} ${ey + Math.sin(rad) * r * 0.3} L ${ex + Math.cos(rad) * r * 0.92} ${ey + Math.sin(rad) * r * 0.92}`}
+                key={index}
+                path={`M ${ex + Math.cos(radians) * r * 0.3} ${ey + Math.sin(radians) * r * 0.3} L ${ex + Math.cos(radians) * r * 0.92} ${ey + Math.sin(radians) * r * 0.92}`}
                 strokeWidth={0.7}
                 color={eyes.irisColor}
                 style="stroke"
@@ -157,7 +146,6 @@ const SingleEye = ({
             );
           })}
 
-          {/* Iris limbal ring (dark edge) */}
           <Circle
             cx={ex}
             cy={ey}
@@ -167,11 +155,8 @@ const SingleEye = ({
             style="stroke"
             opacity={0.7}
           />
-
-          {/* ── Pupil ── */}
           <Circle cx={ex} cy={ey} r={r * 0.42} color={eyes.pupilColor} />
 
-          {/* ── Corneal highlight (main) ── */}
           <Circle
             cx={ex - r * 0.28}
             cy={ey - r * 0.32}
@@ -181,8 +166,6 @@ const SingleEye = ({
           >
             <BlurMask blur={1} style="normal" />
           </Circle>
-
-          {/* ── Corneal highlight (small secondary) ── */}
           <Circle
             cx={ex + r * 0.2}
             cy={ey + r * 0.18}
@@ -193,7 +176,6 @@ const SingleEye = ({
         </Group>
       </Group>
 
-      {/* ── Upper eyelid (skin-colored, draws over eye when closing) ── */}
       <Path path={upperLidPath}>
         <LinearGradient
           start={vec(ex, ey - openH)}
@@ -202,7 +184,6 @@ const SingleEye = ({
         />
       </Path>
 
-      {/* ── Eyelid crease ── */}
       <Path
         path={`M ${ex - eyeW * 0.85} ${ey - openH * 0.5} Q ${ex} ${ey - openH * 1.4 - squintAmt * eyeH * 0.3} ${ex + eyeW * 0.85} ${ey - openH * 0.5}`}
         strokeWidth={1.2}
@@ -212,15 +193,14 @@ const SingleEye = ({
         opacity={0.35}
       />
 
-      {/* ── Upper eyelashes ── */}
-      {!blinkAmt &&
-        upperLashes.map((lash, i) => (
+      {lashesVisible &&
+        upperLashes.map((lash, index) => (
           <Path
-            key={`ul-${i}`}
+            key={`upper-${index}`}
             path={`M ${lash.x0} ${lash.y0 - openH * 0.85} L ${lash.x1} ${lash.y1 - openH * 0.85 - 2}`}
             strokeWidth={
               eyes.lashThickness *
-              (0.7 + 0.3 * Math.sin((i / upperLashes.length) * Math.PI))
+              (0.7 + 0.3 * Math.sin((index / upperLashes.length) * Math.PI))
             }
             color={eyes.lashColor}
             style="stroke"
@@ -229,11 +209,10 @@ const SingleEye = ({
           />
         ))}
 
-      {/* ── Lower eyelashes ── */}
       {squintAmt < 0.8 &&
-        lowerLashes.map((lash, i) => (
+        lowerLashes.map((lash, index) => (
           <Path
-            key={`ll-${i}`}
+            key={`lower-${index}`}
             path={`M ${lash.x0} ${lash.y0 + openH * 0.45} L ${lash.x1} ${lash.y1 + openH * 0.45 + 1.5}`}
             strokeWidth={eyes.lashThickness * 0.55}
             color={eyes.lashColor}
@@ -243,7 +222,6 @@ const SingleEye = ({
           />
         ))}
 
-      {/* ── Lower lid line ── */}
       <Path
         path={`M ${ex - eyeW * 0.9} ${ey + 1} Q ${ex} ${ey + openH * 0.62} ${ex + eyeW * 0.9} ${ey + 1}`}
         strokeWidth={1}
@@ -252,7 +230,6 @@ const SingleEye = ({
         opacity={0.4}
       />
 
-      {/* ── Tear duct (inner corner) ── */}
       <Circle
         cx={side === "L" ? ex + eyeW * 0.88 : ex - eyeW * 0.88}
         cy={ey + openH * 0.1}
@@ -264,11 +241,18 @@ const SingleEye = ({
   );
 };
 
-export const EyesLayer = ({ cx, cy, config, morph }: EyesProps) => {
-  const { eyes, face } = config;
-  const fh = face.height / 2;
-
-  const eyeY = cy + morph.eyeGazeY * 3 + config.eyes.offsetY;
+export const EyesLayer = ({
+  cx,
+  cy,
+  config,
+  morph,
+  isBlinking,
+  emotion = "neutral",
+}: EyesProps) => {
+  const { eyes } = config;
+  const happySquint = emotion === "happy" ? 0.08 : 0;
+  const blinkAmount = isBlinking ? Math.max(morph.blinkL, 0.85) : morph.blinkL;
+  const eyeY = cy + morph.eyeGazeY * 3 + eyes.offsetY;
   const eyeLX = cx - eyes.spacing / 2;
   const eyeRX = cx + eyes.spacing / 2;
 
@@ -278,8 +262,8 @@ export const EyesLayer = ({ cx, cy, config, morph }: EyesProps) => {
         ex={eyeLX}
         ey={eyeY}
         config={config}
-        blinkAmt={morph.blinkL}
-        squintAmt={morph.squintL}
+        blinkAmt={blinkAmount}
+        squintAmt={Math.min(1, morph.squintL + happySquint)}
         gazeX={morph.eyeGazeX}
         gazeY={morph.eyeGazeY}
         side="L"
@@ -288,8 +272,8 @@ export const EyesLayer = ({ cx, cy, config, morph }: EyesProps) => {
         ex={eyeRX}
         ey={eyeY}
         config={config}
-        blinkAmt={morph.blinkR}
-        squintAmt={morph.squintR}
+        blinkAmt={isBlinking ? Math.max(morph.blinkR, 0.85) : morph.blinkR}
+        squintAmt={Math.min(1, morph.squintR + happySquint)}
         gazeX={morph.eyeGazeX}
         gazeY={morph.eyeGazeY}
         side="R"
